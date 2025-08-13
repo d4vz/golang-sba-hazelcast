@@ -1,0 +1,76 @@
+services:
+  hazelcast-1:
+    image: hazelcast/hazelcast:5.3.6
+    environment:
+      - HZ_CLUSTERNAME=auction-cluster
+      - HZ_NETWORK_JOIN_KUBERNETES_ENABLED=false
+      - HZ_NETWORK_JOIN_TCPIP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCPIP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+      - HZ_NETWORK_PUBLICADDRESS=hazelcast-1:5701
+      - HZ_PARTITION_COUNT=271
+      - JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "5701:5701"
+    networks:
+      - hznet
+
+  hazelcast-2:
+    image: hazelcast/hazelcast:5.3.6
+    environment:
+      - HZ_CLUSTERNAME=auction-cluster
+      - HZ_NETWORK_JOIN_KUBERNETES_ENABLED=false
+      - HZ_NETWORK_JOIN_TCPIP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCPIP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+      - HZ_NETWORK_PUBLICADDRESS=hazelcast-2:5701
+      - HZ_PARTITION_COUNT=271
+      - JAVA_OPTS=-Xms512m -Xmx512m
+    networks:
+      - hznet
+
+  hazelcast-3:
+    image: hazelcast/hazelcast:5.3.6
+    environment:
+      - HZ_CLUSTERNAME=auction-cluster
+      - HZ_NETWORK_JOIN_KUBERNETES_ENABLED=false
+      - HZ_NETWORK_JOIN_TCPIP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCPIP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+      - HZ_NETWORK_PUBLICADDRESS=hazelcast-3:5701
+      - HZ_PARTITION_COUNT=271
+      - JAVA_OPTS=-Xms512m -Xmx512m
+    networks:
+      - hznet
+
+  management-center:
+    image: hazelcast/management-center:latest
+    environment:
+      - MC_DEFAULT_CLUSTER=auction-cluster
+      - MC_DEFAULT_CLUSTER_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+    ports:
+      - "8081:8080"
+    depends_on:
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
+    networks:
+      - hznet
+
+  auction-app:
+    build:
+      context: ..
+      dockerfile: ./deployments/docker/Dockerfile
+    environment:
+      - HZ_CLUSTERNAME=auction-cluster
+      - HZ_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - APP_HTTP_ADDR=:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
+    networks:
+      - hznet
+
+networks:
+  hznet:
+    driver: bridge

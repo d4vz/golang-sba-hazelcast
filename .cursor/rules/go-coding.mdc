@@ -1,0 +1,90 @@
+---
+alwaysApply: true
+---
+# Go Coding Guidelines
+
+These rules supplement the general engineering standards for Go services running on Fury PaaS.
+
+---
+
+## General Rules
+- Provide complete, functional code snippets unless asked otherwise.
+- Write comments, identifiers and log messages in **English**.
+- Follow Go naming conventions: `MixedCaps` for exported, `mixedCaps` for unexported; no underscores.
+- Avoid `init()` functions; prefer explicit initialisation.
+- Target **Go 1.22+** and use workspaces (`go work`) in monorepos.
+- Prefer standard-library packages when they satisfy the requirement.
+
+## Dependency Management
+- Use `go.mod` and `go.sum`; run `go mod tidy` before committing.
+- Adhere to semantic versioning.
+- Audit dependencies regularly (`govulncheck`, Fury vulnerability scanner).
+- Minimise external dependencies; prefer internal Fury libraries where available.
+
+## Error Handling
+- Return errors as the final result value.
+- Wrap context with `%w` for further inspection; compose multiple errors with `errors.Join`.
+- Implement custom error types when domain-specific behaviour is needed.
+- Use `errors.Is` / `errors.As` for classification.
+- Log errors once—at the edge where the system loses context—in structured form (see Logging).
+
+## Logging
+- Follow Fury logging standards (see *go-logging.mdc* for detailed implementation).
+- Use structured JSON logging with required fields: timestamp, level, message, service, correlation_id.
+- **Standard output only**: Never write logs to files - use stdout/stderr only.
+- Include correlation IDs (X-Request-ID, X-Trace-ID, X-Span-ID) for distributed tracing.
+- Adopt standard levels: DEBUG, INFO, WARN, ERROR, FATAL.
+- Do **not** log sensitive data; apply redaction helpers for PII, tokens, and credentials.
+
+## Concurrency
+- Use goroutines judiciously; avoid leaks by propagating `context.Context` for cancellation.
+- Close channels when finished; document ownership.
+- Prefer channels over shared memory; when unavoidable, protect with `sync.Mutex`/`atomic`.
+- Run `go test -race` in CI to detect data races.
+- Consider `errgroup` for coordinated goroutine lifecycles.
+
+## Memory & Performance
+- Pre-allocate slices and maps when size is predictable.
+- Use `sync.Pool` for high-frequency allocations (after measuring).
+- Profile with `pprof`, `go tool trace` before optimising.
+- Use `strings.Builder` for heavy string concatenation.
+
+## Generics
+- Employ generics when they improve clarity and reduce duplication.
+- Avoid overly generic abstractions that harm readability.
+
+## Testing
+- Favour table-driven tests; see *go-testing-suites.mdc* for suite conventions.
+- Mock external dependencies; place test doubles in `internal/platform/testdouble`.
+- Aim for ≥ 90 % coverage on critical packages.
+- Run `go test ./... -race -cover` in CI.
+
+## Continuous Integration
+- Checklist for each pipeline run:
+  1. `go vet ./...`
+  2. `staticcheck ./...` and `revive ./...`
+  3. `go test ./... -race`
+  4. `go mod tidy && git diff --exit-code go.sum`
+  5. `govulncheck ./...`
+  6. Build & run linters on Markdown/Swagger (see documentation guidelines).
+
+## API & Database Versioning
+- Expose versioned endpoints (`/v1`, `/v2`).
+- Maintain backwards compatibility until formally deprecated.
+- Use migration tools (e.g. `goose`, `tern`) with versioned scripts.
+
+## Messaging & Caching
+- Define event names and schemas with version IDs.
+- Implement retry policies and dead-letter queues.
+- Choose caching strategy (cache-aside, write-through, write-behind) appropriate to workload.
+
+## Anti-Patterns to Avoid
+1. Mixing responsibilities across layers.
+2. Duplicating business logic.
+3. Leaking infrastructure details into domain packages.
+4. Ignoring error handling.
+5. Neglecting metrics and logs.
+
+---
+
+Complement these rules with *go-testing-suites.mdc* for advanced testing practices and with *security.mdc* for secure-coding requirements.

@@ -1,0 +1,96 @@
+---
+alwaysApply: true
+---
+# Package-Oriented Design (POD) Architecture
+
+These guidelines describe the recommended folder structure and dependency rules for Go services following Package-Oriented Design on Fury PaaS.
+
+---
+
+## 1. Project Structure
+```
+cmd/                  # Executable programs
+  app/                # API binary
+    main.go           # Entry point
+    handler/          # Request handlers
+      consumer/
+      job/
+      handler.go
+internal/             # Business and supporting packages
+  <domain>/           # Core domain logic
+  platform/           # Infrastructure & helpers (database, restclient, config, testdouble)
+```
+
+---
+
+## 2. Package Location Semantics
+| Location | Purpose |
+|---------|---------|
+| `cmd/` | End-user binaries (APIs, CLIs). |
+| `internal/` | Application and domain packages. |
+| `internal/platform/` | Project-specific infrastructure code. |
+
+---
+
+## 3. Import Rules
+| Importing Package | Allowed Imports | Forbidden Imports |
+|-------------------|-----------------|-------------------|
+| `cmd/*` | `internal/*`, `internal/platform/*` | Other `cmd/*` packages |
+| `internal/<domain>` | Same directory sub-packages, `internal/platform/*` | Other top-level `internal/*` siblings |
+| `internal/platform/*` | Other `internal/platform/*` | `cmd/*`, application policies |
+| Sub-package | Parents only | Unrelated siblings |
+
+---
+
+## 4. Location Policies
+| Layer | Allowed | Not Allowed |
+|-------|---------|-------------|
+| `internal/platform` | Decouple config & runtime changes; decouple metrics & telemetry. | Logging directly; application policies. |
+| `cmd` & `internal` | Application policies; logging & config handling. | – |
+
+---
+
+## 5. Value vs Pointer Semantics
+- Use a consistent choice (value **or** pointer) for each exported type.
+- Interfaces define behaviour; concrete types hold data.
+- Prefer value receivers for interfaces when feasible.
+
+---
+
+## 6. Error Handling by Layer
+| Layer | Panics | Error Wrapping |
+|-------|--------|---------------|
+| `internal/platform` | ❌ Not allowed | ❌ Return root-cause errors only |
+| `internal` | ❌ Not allowed | ✅ Wrap with context |
+| `cmd` | ✅ Allowed | ✅ Wrap with context |
+
+## 7. Panic Recovery
+| Layer | Recovery Conditions |
+|-------|---------------------|
+| `cmd` | May recover if 100 % integrity is restored. |
+| `internal`, `internal/platform` | Recover only when the goroutine belongs to the package **and** the app can be notified. |
+
+---
+
+## Example Snippet
+```go
+// cmd/app/main.go
+func main() {
+    app.Run()
+}
+
+// internal/user/service.go
+func (s *Service) Create(ctx context.Context, in CreateParams) error {
+    return s.repo.Tx(ctx, func(txRepo Repository) error {
+        return txRepo.Insert(ctx, in.toModel())
+    })
+}
+
+// internal/platform/database/db.go
+func New(cfg Config) (*sql.DB, error) { /* … */ }
+```
+
+---
+
+Complement these architectural rules with *go-coding.mdc* for code style, *go-testing-suites.mdc* for testing, and *security.mdc* for secure boundaries.
+

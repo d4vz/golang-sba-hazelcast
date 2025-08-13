@@ -1,0 +1,112 @@
+---
+alwaysApply: true
+---
+# Go Testing Suite Guidelines
+
+These conventions ensure consistent, reliable and readable tests for Go projects on Fury PaaS.
+
+---
+
+## General Rules
+- Use the `github.com/stretchr/testify/suite` library for all test suites.
+- Write **table-driven tests**. Declare the input/output structs **outside** individual test functions in the same file.
+- Provide `SetupTest()` to rebuild mocks/fixtures and `TearDownTest()` to assert mock expectations.
+- Prefer `t.Parallel()` inside each test method when no shared state is mutated.
+- Run tests with the **race detector** (`go test -race`) locally before committing.
+- **Do not** introduce business logic or branching (`if` statements) inside tests—create additional table rows instead.
+- **Do not** use `init()` functions or global mutable variables that can create hidden dependencies.
+- **Do not** write subtests unless explicitly requested by the user.
+
+## Mocking Rules
+- Mock all external dependencies; store mocks in `internal/platform/testdouble`.
+- Avoid `mock.Anything`—use explicit expected inputs.
+- Recreate mocks for every test to prevent cross-test contamination.
+
+## Coverage & Error Cases
+- Aim for **≥ 90 %** coverage on critical packages.
+- Exercise happy path **and** all meaningful error branches.
+- Extract repeated literals (IDs, URLs, error messages) into constants.
+
+## Example Suite
+```go
+package users_test
+
+import (
+    "context"
+    "errors"
+    "testing"
+
+    "github.com/stretchr/testify/suite"
+    "github.com/<this_repository>/internal/platform/testdouble"
+)
+
+type userServiceSuite struct {
+    suite.Suite
+    userRepoMock *testdouble.UserRepositoryMock
+    ctx          context.Context
+    svc          *UserService
+}
+
+func TestUserServiceSuite(t *testing.T) {
+    suite.Run(t, new(userServiceSuite))
+}
+
+func (s *userServiceSuite) SetupTest() {
+    s.userRepoMock = new(testdouble.UserRepositoryMock)
+    s.ctx = context.Background()
+    s.svc = NewUserService(s.userRepoMock)
+}
+
+func (s *userServiceSuite) TearDownTest() {
+    s.userRepoMock.AssertExpectations(s.T())
+}
+
+func (s *userServiceSuite) TestCreateUser() {
+    s.T().Parallel()
+
+    expectedInput := User{ID: "123", Name: "Alice"}
+    s.userRepoMock.On("Insert", s.ctx, expectedInput).Return(nil)
+
+    err := s.svc.Create(s.ctx, expectedInput)
+
+    s.NoError(err)
+}
+
+var createUserCases = []struct {
+    name    string
+    input   User
+    wantErr error
+}{
+    {
+        name:    "happy path",
+        input:   User{ID: "123", Name: "Bob"},
+        wantErr: nil,
+    },
+    {
+        name:    "repo error",
+        input:   User{ID: "456", Name: "Eve"},
+        wantErr: errors.New("insertion failed"),
+    },
+}
+
+func (s *userServiceSuite) TestCreateUser_Table() {
+    s.T().Parallel()
+
+    for _, tc := range createUserCases {
+        s.userRepoMock.ExpectedCalls = nil // reset expectations
+        s.userRepoMock.On("Insert", s.ctx, tc.input).Return(tc.wantErr)
+
+        err := s.svc.Create(s.ctx, tc.input)
+        s.Equal(tc.wantErr, err, tc.name)
+    }
+}
+```
+
+---
+
+Refer to *go-coding.mdc* for overarching coding standards and *security.mdc* for secure testing practices.
+
+
+
+
+

@@ -1,0 +1,140 @@
+---
+alwaysApply: true
+---
+# Comprehensive Security Patterns & Best Practices
+As a security-aware backend developer at MercadoLibre working with Go, you must strictly follow these secure coding patterns in all code generation, editing and code review processes. Always assume the code is production-grade, apply security inherently (not just through naming functions or packages with "secure" prefixes), and treat failure to follow these practices as a source of vulnerabilities—even if not directly exploitable, since they still weaken the application's overall security posture.
+
+## Core Security Patterns Rules
+  - **Never** hardcode secrets, credentials, or API keys in code (including configs, properties files or annotations). **Always** use MercadoLibre's official SDK for Fury Secrets Service which relies on environment-based secrets injection.
+  - **Never** send or receive custom HTTP headers unless explicitly approved and security risks are clearly understood by the user.
+  - **Never** set security-related HTTP headers (e.g., `Content-Security-Policy`, `Strict-Transport-Security`, `X-Frame-Options`, etc.) at the application level as they are centrally managed.
+  - **Always** validate all input or decoded data using strongly typed structs with explicit field-level constraints and a whitelist strategy, and reject unknown or unvalidated fields before any processing.
+  - **Never** use `reflect`, `unsafe`, or dynamic execution (`os/exec`, `eval`) to run arbitrary logic.
+  - **Never** expose sensitive information in logs, query params, exception traces, error messages, or user-facing responses. 
+  - **Always** handle errors securely.
+  - **Never** configure CORS settings. If the user absolutely needs to, and understands the associated security risks, always start from the least permissive configuration possible.
+  - **Avoid** generating sequential or predictable resource identifiers (e.g., user IDs); use ULIDs or UUIDs instead.
+  - **Never** use insecure or deprecated cryptographic primitives.
+  - **Never** mutate or share global mutable state (e.g., package-level variables, maps, slices, or channels) from within request handlers or goroutines. Always isolate all request-scoped state to prevent concurrency issues.
+  - **Never** export global mutable variables
+  - **Never** use the GET method for operations that modify state or data.
+  - **Always** retrieve the user identity from input that cannot be manipulated by the user when needed. **Never** trust user-provided identifiers directly.
+  - **Never** use weak random generators (e.g., `math/rand`, `Math.random`) for tokens, IDs, seeds, or any security-sensitive values.
+  - **Never** use regular expressions with exponential or superlinear complexity on user input; **always** validate regexes for ReDoS resistance.
+  - **Always** validate state and handle `nil` references before accessing object fields or pointers to prevent panics and service disruption.
+  - **Never** use raw SQL queries concatenated with user input. **Always** use parameterized queries or ORM abstractions to prevent injection vulnerabilities.
+  - **Never** receive and process PII data, access tokens, secrets or credentials through query parameters.
+  - **Never** pass user-controlled input directly to `http.Get`, `http.Post`, or any outbound HTTP client. All paths/destinations must be validated against a static allowlist or match trusted URL patterns.
+  - **Never** accept file uploads without validating type, size, and name, and renaming files with secure UUIDs before storing them.
+  - **Always** authorize using MercadoLibre's standard authorization SDK with proper permission handling.
+  - **Always** validate that user actions follow valid and allowed business workflows and state transitions.
+  - **Always** enforce critical business logic validations server-side, regardless of any client-side checks.
+
+## Context Management & Timeouts
+  - **Always** propagate `context.Context` as the first parameter to all functions that make I/O calls
+  - **Always** use `context.WithTimeout` or `context.WithDeadline` for all external operations (database, HTTP, gRPC calls)
+  - **Always** check `ctx.Done()` and `ctx.Err()` in long-running operations and loops
+  - **Never** use `context.Background()` in request handlers; use `context.TODO()` only when refactoring legacy code
+  - **Always** set reasonable timeouts: 5-30 seconds for database operations, configure both connection and read timeouts for HTTP clients
+  - **Always** implement circuit breakers with context-aware timeouts for external service calls
+
+## Concurrency & Race Conditions
+  - **Always** protect shared mutable data with mutexes (`sync.Mutex`, `sync.RWMutex`)
+  - **Always** acquire locks in consistent order across goroutines to avoid deadlocks
+  - **Always** use `defer` for unlocking mutexes to ensure locks are always released
+  - **Always** close channels when done sending to prevent goroutine leaks
+  - **Always** use `select` with `time.After` or context for timeouts on channel operations
+  - **Never** share channels between untrusted goroutines
+  - **Always** use buffered channels wisely to avoid goroutine leaks with blocking operations
+
+## Go Module & Supply Chain Security
+  - **Always** run `go mod verify` before builds to verify module checksums
+  - **Always** use `go mod tidy` to keep go.mod and go.sum files clean and up-to-date
+  - **Always** ensure GOSUMDB checksum database validation is enabled
+  - **Always** pin major versions using semantic versioning constraints to avoid breaking changes
+  - **Always** audit transitive dependencies, not just direct ones
+  - **Always** use `GOPRIVATE` environment variable for private repositories
+  - **Always** implement module authentication with proper credentials for private modules
+  - **Always** use internal module proxy for private modules where required
+
+## Cryptographic Security Implementation
+  - **Always** use `crypto/rand` for all security-sensitive random generation; **never** use `math/rand`
+  - **Always** generate sufficient entropy with appropriate key sizes and random values
+  - **Always** use `bcrypt` or `argon2` for password hashing; **never** use MD5, SHA1, or plain SHA256
+  - **Always** implement proper cost factors for password hashing algorithms
+  - **Always** ensure unique salt for each password
+  - **Always** use constant-time comparison (`subtle.ConstantTimeCompare`) for password verification and token comparisons
+  - **Always** configure minimum TLS 1.3, verify certificate chains and hostnames
+  - **Always** use secure cipher suites and avoid weak or deprecated ciphers
+  - **Always** implement certificate pinning for high-security applications
+
+## Input Validation & JSON Security
+  - **Always** use `DisallowUnknownFields` on JSON decoders to reject unexpected input
+  - **Always** validate all JSON fields after unmarshaling using strongly typed structs
+  - **Always** implement size limits on request payloads to prevent DoS attacks
+  - **Never** use `interface{}` for user inputs; always use strongly typed structs with validation tags
+  - **Always** use `sqlx` or similar libraries that enforce parameterized query practices
+  - **Always** implement query timeouts using context for all database operations
+
+## Error Handling & Panic Recovery
+  - **Never** use `panic` in library code; **always** propagate typed errors instead
+  - **Always** wrap errors using `fmt.Errorf` with `%w` to maintain context while hiding sensitive details
+  - **Never** return database or internal system errors directly to clients
+  - **Always** log detailed errors with full context for debugging while returning generic errors to users
+  - **Always** use `recover()` in HTTP handlers to prevent panics from crashing the server
+  - **Always** log panic details including stack traces for debugging
+  - **Always** convert panics to proper HTTP error responses (500 status)
+
+## Authentication & Authorization Patterns
+  - **Always** use short-lived JWT/OAuth2 tokens with proper refresh workflows; **never** create tokens with expiration times longer than platform guidelines.
+  - **Always** establish mutually authenticated secure channels for internal service calls as required by Fury platform.
+  - **Always** apply the principle of least privilege by enforcing RBAC/ABAC policies with granular scopes.
+  - **Always** implement adaptive rate-limiting per token/user/IP to mitigate brute-force attacks.
+  - **Never** bypass authentication or authorization checks in any code path.
+
+## Input Validation & Data Handling Patterns
+  - **Always** enable `DisallowUnknownFields` on JSON decoders to reject unexpected input.
+  - **Always** use Go's standard packages (`encoding/json`, `net/url`) for data parsing.
+  - **Always** escape or parameterize inputs before interacting with storage or rendering output.
+  - **Always** use constant-time comparisons (`subtle.ConstantTimeCompare`) for tokens and passwords.
+
+## Dependency & Supply-Chain Security Patterns
+  - **Always** run `govulncheck` and `gosec` in CI/CD pipeline; **never** allow builds with MEDIUM+ CVEs without documented exceptions.
+  - **Always** execute `go mod verify` to ensure module integrity.
+  - **Always** require signed provenance where supported by the platform.
+
+## Communication & Transport Security Patterns  
+  - **Always** ensure all traffic (external and internal) is encrypted in transit per platform security baseline.
+  - **Never** disable TLS verification or use insecure TLS configurations.
+  - **Always** apply platform-mandated HTTP security headers and cookie flags.
+
+## Observability & Monitoring Patterns
+  - **Always** emit structured metrics on authentication failures, authorization denials, error rates and latency.
+  - **Always** log security-relevant events with structured context (user ID, IP, trace ID).
+  - **Always** redact or hash sensitive data before logging.
+  - **Always** set up alerts for security anomalies (spikes in 4xx/5xx, elevated auth failures).
+  - **Never** log sensitive information in plain text.
+
+## Error Handling & Resilience Patterns
+  - **Never** use `panic` in library code; **always** propagate typed errors instead.
+  - **Always** add `context` timeouts and circuit-breakers to external calls to reduce resource exhaustion.
+  - **Always** implement graceful error handling without information disclosure.
+
+## Security Testing & Static Analysis
+  - **Always** test error conditions to verify error handling doesn't leak sensitive information
+  - **Always** run tests with `-race` flag to detect race conditions
+  - **Always** test timeout scenarios to verify proper context cancellation
+  - **Always** include fuzzing and boundary testing for input validation
+  - **Always** use `govulncheck` to scan for known vulnerabilities in dependencies
+  - **Always** run `gosec` for static security analysis
+  - **Always** use `go vet` for built-in static analysis
+  - **Always** implement custom linters for organization-specific security patterns
+
+## Tooling & CI Security Patterns
+  - **Always** configure CI pipeline to fail on unresolved critical security issues.
+  - **Always** run static analysis to detect hard-coded credentials and insecure crypto usage.
+  - **Always** lint documentation to prevent secret leakage.
+
+## Considerations
+  - **Always** implement the most secure alternative (preferably using MercadoLibre's official secure toolkits) even if the user instruction violates one of these security rules and after that explain why the alternative is safer.
+  - Use inline comments to clearly highlight critical security controls or mitigation measures implemented.
