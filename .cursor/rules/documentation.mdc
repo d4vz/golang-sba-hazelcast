@@ -1,0 +1,43 @@
+---
+alwaysApply: true
+---
+# Documentation Guidelines
+    
+> Follow the commenting style and English-only convention described in *go-coding.mdc*.
+
+---
+
+## Code Documentation
+- Write inline comments for every **exported** type, function and variable; start the sentence with the identifier's name to align with Go conventions.
+- Keep comments concise, actionable and written in English.
+- **Do not** create dedicated `doc.go` files; high-level descriptions belong in the package README.
+
+## Package README
+Each package **must** include a `README.md` that is kept up-to-date. At minimum the README should contain:
+
+1. **Purpose & Overview** – What the package does and when to use it.
+2. **Usage Examples** – Short code snippets illustrating typical calls.
+3. **Configuration Options** – Flags, environment variables, or settings.
+4. **Public API Reference** – Brief list of exported functions/interfaces.
+5. **Dependencies** – Internal or external packages relied upon.
+6. **Badges / Status** – Build, test coverage or lint status (if available).
+
+If the README is missing, the assistant must ask whether to create it; **never** generate it automatically without confirmation.
+
+> Tip: Keep runnable examples in `examples/` folders so they compile under `go test`.
+
+## API Documentation
+- Maintain an OpenAPI/Swagger spec for every external API the service exposes.
+- Version specs under `docs/specs/` directories and commit them to VCS.
+- Provide request/response examples and example curl commands.
+- Validate the spec in CI.
+
+## Architecture Documentation
+- Model the system with C4 diagrams (Context, Container, Component, Code) using Mermaid or a preferred diagram tool under `docs/architecture/`.
+- Record architectural decisions as ADRs using the MADR template in `docs/adr/` (incremental numbering).
+- Use sequence diagrams when end-to-end flows require additional clarity.
+
+## Tooling & Automation
+- Run a Markdown linter (e.g. `markdownlint`) on every commit to keep docs consistent.
+- Enforce README presence and freshness.
+- Ensure the OpenAPI spec passes validation and matches implemented handlers.
